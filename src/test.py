@@ -1,0 +1,7 @@
+import RPi.GPIO as GPIO
+
+EXTRACTOR_FAN_PIN = 24
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(EXTRACTOR_FAN_PIN, GPIO.OUT)
+GPIO.output(EXTRACTOR_FAN_PIN, GPIO.LOW)
