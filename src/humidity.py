@@ -1,10 +1,10 @@
-import time
 import datetime
-
-import numpy as np
+import time
 
 import Adafruit_DHT
 import RPi.GPIO as GPIO
+import numpy as np
+from Adafruit_IO import Client
 
 # Dew Point Calc Constants
 A = 17.27
@@ -15,13 +15,16 @@ DEW_POINT_RANGE = 0.25
 DHT_PIN = 4
 
 # Max number of times to attempt read the temp from the sensor
-MAX_DHT_READ_ATTEMPTS=5
+MAX_DHT_READ_ATTEMPTS = 5
 
 # Extractor Fan Pin
 EXTRACTOR_FAN_PIN = 24
 
 # Log file location
 LOG_FILE = '/home/pi/humidity/logs/humidity.log'
+
+# for logging to adafruit.io
+ADAFRUIT_IO_KEY = ''
 
 # Max time the can be kept on before we shut it down (to cooldown etc)
 MAX_ON_TIME = 15 * 60
@@ -30,24 +33,34 @@ FAN_REST_TIME = 15 * 60
 # Loop check interval
 LOOP_INTERVAL = 5 * 60
 
-# create (or append to) log file
-log = open(LOG_FILE, 'a')
-
 fanOnTime = 0
 fanOn = False
 fanRest = False
 fanRestTime = 0
+
+# create (or append to) log file
+log = open(LOG_FILE, 'a')
+
+# adafruit.io
+aio = Client(ADAFRUIT_IO_KEY)
 
 
 def getDateTime():
     return datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
 
-def logOutput(output):
+def logOutputToFile(output):
     # noinspection PyShadowingNames
     message = getDateTime() + " - " + output
     print message
     log.write(message + "\n")
+
+
+def logOutputToAdafruitIO(temperature, humidity, Tdp, fanOn):
+    aio.create_data('loft.loft-temperature', temperature)
+    aio.create_data('loft.loft-humidity', humidity)
+    aio.create_data('loft.loft-dew-point-temperature', Tdp)
+    aio.create_data('loft.fan-state', fanOn)
 
 
 # noinspection PyShadowingNames
@@ -75,7 +88,7 @@ def calculateDewPointTemperature(humidity_pct, temp):
 ################################################################################
 # Program starts now
 
-logOutput("Starting now")
+logOutputToFile("Starting now")
 
 # setup gpio - temp/humidity sensor
 GPIO.setwarnings(False)
@@ -83,8 +96,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(EXTRACTOR_FAN_PIN, GPIO.OUT)
 GPIO.output(EXTRACTOR_FAN_PIN, GPIO.LOW)
 
-logOutput("GPIO Setup Complete")
-
+logOutputToFile("GPIO Setup Complete")
 
 while True:
     ################################################################################
@@ -128,7 +140,8 @@ while True:
                     fanRest = True
                     fanRestTime = 0
 
-        logOutput(message)
+        logOutputToFile(message)
+        logOutputToAdafruitIO(temp, humidity, Tdp, fanOn)
 
     # sleep until the next temp & fan check
     time.sleep(LOOP_INTERVAL)
