@@ -1,10 +1,14 @@
 import datetime
 import time
+import sys
 
 import Adafruit_DHT
 import RPi.GPIO as GPIO
 import numpy as np
 from Adafruit_IO import Client
+
+STARTUP_DELAY = 60
+time.sleep(STARTUP_DELAY)
 
 # Dew Point Calc Constants
 A = 17.27
@@ -24,7 +28,7 @@ EXTRACTOR_FAN_PIN = 24
 LOG_FILE = '/home/pi/humidity/logs/humidity.log'
 
 # for logging to adafruit.io
-ADAFRUIT_IO_KEY_FILE = 'adafruit.io.key.txt'
+ADAFRUIT_IO_KEY_FILE = '/home/pi/humidity/adafruit.io.key.txt'
 
 # Max time the can be kept on before we shut it down (to cooldown etc)
 MAX_ON_TIME = 10 * 60
@@ -38,14 +42,6 @@ fanOn = False
 fanRest = False
 fanRestTime = 0
 
-# create (or append to) log file
-log = open(LOG_FILE, 'a')
-
-# adafruit.io
-keyFile = open(ADAFRUIT_IO_KEY_FILE, "r")
-adafruitIoKey = keyFile.readline()
-aio = Client(adafruitIoKey)
-
 
 def getDateTime():
     return datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -56,13 +52,19 @@ def logOutputToFile(output):
     message = getDateTime() + " - " + output
     print message
     log.write(message + "\n")
+    log.flush()
+
+
+def formatAndLogToAdafruitId(feedId, value):
+    formattedValue = "{0:0.1f}".format(value)
+    aio.send(feedId, formattedValue)
 
 
 def logOutputToAdafruitIO(temperature, humidity, Tdp, fanOn):
-    aio.create_data('loft.loft-temperature', temperature)
-    aio.create_data('loft.loft-humidity', humidity)
-    aio.create_data('loft.loft-dew-point-temperature', Tdp)
-    aio.create_data('loft.fan-state', fanOn)
+    formatAndLogToAdafruitId('loft.loft-temperature', temperature)
+    formatAndLogToAdafruitId('loft.loft-humidity', humidity)
+    formatAndLogToAdafruitId('loft.loft-dew-point-temperature', Tdp)
+    formatAndLogToAdafruitId('loft.fan-state', fanOn)
 
 
 # noinspection PyShadowingNames
@@ -90,15 +92,26 @@ def calculateDewPointTemperature(humidity_pct, temp):
 ################################################################################
 # Program starts now
 
-logOutputToFile("Starting now")
+# create (or append to) log file
+log = open(LOG_FILE, 'a')
+try:
+    # adafruit.io
+    keyFile = open(ADAFRUIT_IO_KEY_FILE, "r")
+    adafruitIoKey = keyFile.readline().rstrip()
+    aio = Client(adafruitIoKey)
 
-# setup gpio - temp/humidity sensor
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(EXTRACTOR_FAN_PIN, GPIO.OUT)
-GPIO.output(EXTRACTOR_FAN_PIN, GPIO.LOW)
+    logOutputToFile("Starting now")
 
-logOutputToFile("GPIO Setup Complete")
+    # setup gpio - temp/humidity sensor
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(EXTRACTOR_FAN_PIN, GPIO.OUT)
+    GPIO.output(EXTRACTOR_FAN_PIN, GPIO.LOW)
+
+    logOutputToFile("GPIO Setup Complete")
+except Exception as err:
+    logOutputToFile("Exception: {0}".format(err))
+    sys.exit()
 
 while True:
     try:
@@ -132,7 +145,7 @@ while True:
                     fanRestTime = 0
                     message += ', Turning Fan Off'
             else:
-                if Tdp < temp + DEW_POINT_RANGE:
+                if temp < Tdp + DEW_POINT_RANGE:
                     if fanRest and fanOnTime <= FAN_REST_TIME:
                         message += ', Fan would turn on - resting'
                         fanOnTime += LOOP_INTERVAL
