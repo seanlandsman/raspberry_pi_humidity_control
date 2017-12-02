@@ -24,7 +24,7 @@ EXTRACTOR_FAN_PIN = 24
 LOG_FILE = '/home/pi/humidity/logs/humidity.log'
 
 # for logging to adafruit.io
-ADAFRUIT_IO_KEY = ''
+ADAFRUIT_IO_KEY_FILE = 'adafruit.io.key.txt'
 
 # Max time the can be kept on before we shut it down (to cooldown etc)
 MAX_ON_TIME = 15 * 60
@@ -42,7 +42,9 @@ fanRestTime = 0
 log = open(LOG_FILE, 'a')
 
 # adafruit.io
-aio = Client(ADAFRUIT_IO_KEY)
+keyFile = open(ADAFRUIT_IO_KEY_FILE, "r")
+adafruitIoKey = keyFile.readline()
+aio = Client(adafruitIoKey)
 
 
 def getDateTime():
